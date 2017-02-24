@@ -1,0 +1,12 @@
+---
+
+#
+# playbook to setup vault based on consul
+#
+
+
+- hosts: all
+  gather_facts: False
+  roles:
+    - { role: vault-remove, tags: ['vault'] }
+    - { role: consul-remove, tags: ['consul'] }

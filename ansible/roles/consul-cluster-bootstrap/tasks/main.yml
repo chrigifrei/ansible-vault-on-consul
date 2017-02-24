@@ -1,0 +1,55 @@
+---
+
+# bootstraps Hashicorp Consul (consul.io) cluster
+
+
+- name: get cluster member ips
+  set_fact: member_ip="{{ hostvars[item].ansible_host }}"
+  with_items: "{{ groups.consul_cluster }}"
+  register: clu_mem_result
+  run_once: true
+
+- name: create cluster member ip list
+  set_fact: cluster_member_ips="[ {% for i in clu_mem_result.results %}'{{ i.ansible_facts.member_ip }}'{% if not loop.last %},{% endif %}{%endfor%} ]"
+  run_once: true
+# - debug: var=cluster_member_ips
+#   run_once: true
+
+- name: generate key
+  shell: "consul keygen"
+  register: keygen_result
+  run_once: true
+
+- name: store the key
+  set_fact:
+    consul_key: "{{ keygen_result }}"
+  run_once: true
+
+- name: put config files in place
+  template:   
+    src="server-config.json"
+    dest="{{ consul.config_dir }}"
+    owner=consul
+    group=root
+    mode=0640
+
+- name: link the server config
+  file:
+    src="{{ consul.config_dir }}/server-config.json"
+    dest="{{ consul.config_dir }}/config.json"
+    state=link
+
+- name: enable and start service
+  service:
+    name="consul"
+    enabled=yes
+    sleep=5
+    state=restarted
+
+- name: waiting for services to start up
+  pause: seconds=10
+
+- name: establish the cluster
+  shell: for host in {{ cluster_member_ips | join(" ") }}; do source /etc/profile; consul join $host; sleep 2; done
+  delegate_to: "{{ groups.centraldeploy[0] }}"
+  run_once: true

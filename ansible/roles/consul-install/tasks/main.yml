@@ -1,0 +1,157 @@
+---
+
+# installs Hashicorp Consul (consul.io)
+
+
+###################################################################################
+# extcfr, 28.09.2016, IMPROVAL REQUIRED
+# IP is needed for local (vagrant) env
+# better would be the use of ansible_eth0.address in client-config.json
+###################################################################################
+- name: get hosts IP addr
+  shell: ip a | grep "{{ consul_public_ip_prefix }}" | awk '{print $2}' | cut -d'/' -f1
+  register: ip
+# - debug: msg="host IP {{ ip.stdout }}"
+
+- name: get cluster member ips
+  set_fact: member_ip="{{ hostvars[item].ansible_host }}"
+  with_items: "{{ groups.consul_cluster }}"
+  register: clu_mem_result
+  run_once: true
+
+- name: create cluster member ip list
+  set_fact: cluster_member_ips="[ {% for i in clu_mem_result.results %}'{{ i.ansible_facts.member_ip }}'{% if not loop.last %},{% endif %}{%endfor%} ]"
+  run_once: true
+# - debug: var=cluster_member_ips
+#   run_once: true
+
+- name: install prereqs
+  yum: 
+    name={{ item }}
+    state=present
+  with_items:
+    - unzip
+    - jq
+    - curl
+    - bind-utils
+
+- name: unpack the binary
+  unarchive: 
+    src="{{ consul.binary_archive }}"
+    dest="{{ all.bin_dir }}"
+
+
+- name: adding system user
+  user: 
+    name=consul
+    system=yes
+    home="{{ consul.root_dir }}"
+    createhome=no
+
+- name: create consul root dir
+  file:
+    path="{{ consul.root_dir }}"
+    state=directory
+    owner=consul
+    group=consul
+    mode=0755
+
+- name: create systemd dir
+  file:   
+    state=directory
+    path={{ item }}
+    owner=root
+    group=root
+    recurse=yes
+  with_items:
+    - "{{ all.systemd_unitfiles_dir }}"
+    - "{{ consul.config_dir }}"
+
+- name: create data dir structure
+  file:   
+    state=directory
+    path={{ item.path }}
+    owner=consul
+    group=root
+    mode={{ item.mode }}
+    recurse=yes
+  with_items:
+    - path: "{{ consul.root_dir }}/data/"
+      mode: '0700'
+    - path: "{{ consul.root_dir }}/ui/"
+      mode: '0755'
+    - path: "{{ consul.config_dir }}/services.d/"
+      mode: '0755'
+
+- name: unpack the Web UI
+  unarchive: 
+    src="{{ consul.ui_archive }}"
+    dest="{{ consul.root_dir }}/ui/"
+
+- name: get the cluster key
+  shell: consul keyring -list | grep -A1 "{{ consul.datacenter_name }}" | tail -1 | awk '{print $1}'
+  delegate_to: "{{ groups.centraldeploy[0] }}"
+  run_once: true
+  register: consul_key
+# - debug: var=consul_key.stdout
+#   run_once: true
+
+- name: put config files in place
+  template:   
+    src="client-config.json"
+    dest="{{ consul.config_dir }}"
+    owner=consul
+    group=root
+    mode=0640
+
+- name: link the config
+  file:
+    src="{{ consul.config_dir }}/client-config.json"
+    dest="{{ consul.config_dir }}/config.json"
+    state=link
+
+- name: put shell wrapper in place
+  template:   
+    src="consul-shell-wrapper.sh"
+    dest="{{ consul.root_dir }}"
+    owner=consul
+    group=root
+    mode=0644
+
+# the consult binary cannot use the no_proxy var
+# therefore we have to unset the httpX_proxy vars
+- name: source shell wrapper in /etc/profile
+  lineinfile: 
+    dest=/etc/profile
+    line="source {{ consul.root_dir }}/consul-shell-wrapper.sh"
+
+- name: put init.d script in place
+  template:   
+    src="consul.sh"
+    dest="/etc/init.d/consul"
+    owner=root
+    group=root
+    mode=0755
+
+- name: create log file
+  file:
+    path="{{ consul.log_file }}"
+    owner=consul
+    group=root
+    mode=640
+    state=touch
+
+- name: setup logrotate
+  template:   
+    src="logrotate.cfg"
+    dest="/etc/logrotate.d/consul"
+    owner=consul
+    group=root
+    mode=0644
+
+- name: enable and start service
+  service:
+    name="consul"
+    enabled=yes
+    sleep=5
+    state=restarted

@@ -1,0 +1,11 @@
+{
+  "service": {
+    "name": "example",
+    "checks": [
+      {
+        "interval" : "60s",
+        "script" : "echo 'fantastic example'; exit 0"
+      }
+    ]
+  }
+}

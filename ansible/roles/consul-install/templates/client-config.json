@@ -1,0 +1,11 @@
+{
+    "server": false,
+    "datacenter": "{{ consul.datacenter_name }}",
+    "data_dir": "{{ consul.root_dir }}/data/",
+    "ui_dir": "{{ consul.root_dir }}/ui/",
+    "log_level": "INFO",
+    "enable_syslog": false,
+    "start_join": [ {% for mem_ip in cluster_member_ips %}"{{ mem_ip }}"{% if not loop.last %},{% endif %}{% endfor %} ],
+    "advertise_addr": "{{ ip.stdout }}",
+    "encrypt": "{{ consul_key.stdout }}"
+}

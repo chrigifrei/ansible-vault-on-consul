@@ -1,0 +1,40 @@
+---
+
+# removes Hashicorp Consul (consul.io)
+
+
+- name: stop service
+  service:
+    name="consul"
+    state=stopped
+  ignore_errors: yes
+
+- name: remove dir structures
+  file:   
+    state=absent
+    path={{ item }}
+  with_items:
+    - "{{ consul.config_dir }}"
+    - "{{ consul.root_dir }}"
+
+- name: remove files
+  file:   
+    state=absent
+    path={{ item }}
+  with_items:
+    - "/etc/init.d/consul"
+    - "{{ all.systemd_unitfiles_dir }}/consul.service"
+    - "{{ consul.log_file }}"
+    - "/etc/logrotate.d/consul"
+  ignore_errors: yes
+
+- name: remove shell wrapper from /etc/profile
+  lineinfile: 
+    dest=/etc/profile
+    line="source {{ consul.root_dir }}/consul-shell-wrapper.sh"
+    state=absent
+
+- name: remove system user
+  user: 
+    name=consul
+    state=absent

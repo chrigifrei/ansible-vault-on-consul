@@ -1,0 +1,38 @@
+---
+
+# removes Hashicorp Vault (vaultproject.io)
+
+
+- name: stop service
+  service:
+    name="vault"
+    state=stopped
+  ignore_errors: yes
+
+- name: remove data dir structures
+  file:   
+    state=absent
+    path={{ item }}
+  with_items:
+    - "{{ vault.root_dir }}"
+    - "{{ vault.config_dir }}"
+    - "{{ vault.log_dir }}"
+  ignore_errors: yes
+
+- name: remove files
+  file:   
+    state=absent
+    path={{ item }}
+  with_items:
+    - "/etc/init.d/vault"
+    - "/etc/logrotate.d/vault"
+    - "{{ all.systemd_unitfiles_dir }}/vault.service"
+    - "{{ all.bin_dir }}/vault"
+    - "{{ all.bin_dir }}/vault-unseal.sh"
+  ignore_errors: yes
+
+- name: remove shell wrapper from /etc/profile
+  lineinfile: 
+    dest=/etc/profile
+    line="source {{ vault.root_dir }}/bin/vault-shell-wrapper.sh"
+    state=absent

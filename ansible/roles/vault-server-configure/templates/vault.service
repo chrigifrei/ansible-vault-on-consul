@@ -1,0 +1,12 @@
+[Unit]
+Description=vault - centralized secrets store
+After=network.target
+
+[Service]
+ExecStart="{{ all.bin_dir }}/vault server -config={{ vault.config_dir }}/server-config.hcl; echo $! > /var/run/vault.pid"
+Type=forking
+User=root
+PIDFile="/var/run/vault.pid"
+
+[Install]
+WantedBy=default.target

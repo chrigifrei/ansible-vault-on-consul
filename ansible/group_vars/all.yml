@@ -1,0 +1,32 @@
+---
+all:
+  bin_dir: "/usr/local/bin"
+  systemd_unitfiles_dir: "/etc/systemd/system"
+
+consul:
+  datacenter_name: "dc1"
+  binary_archive: "consul_latest_linux_amd64.zip"
+  ui_archive: "consul_latest_web_ui.zip"
+  log_file: "/var/log/consul.log"
+  config_dir: "/etc/consul"
+  root_dir: "/opt/consul"
+
+vault:
+  binary_archive: "vault_latest_linux_amd64.zip"
+  log_dir: "/var/log/vault"
+  config_dir: "/etc/vault"
+  root_dir: "/opt/vault"
+  init_secrets_file: "vault-init-secrets.txt"
+  service_listen_port: 8200
+  ldap_config: >
+    url="ldaps://<YOUR-LDAP-SERVER>:636" 
+    userattr=uid 
+    userdn="ou=people,o=<YOUR-TLD>,c=com" 
+    groupdn="ou=group,o=<YOUR-TLD>,c=com" 
+    insecure_tls=true 
+    starttls=true
+  ldap_groups:
+    - name: staff
+      policy: ro-policy
+    - name: ext
+      policy: sudo-policy

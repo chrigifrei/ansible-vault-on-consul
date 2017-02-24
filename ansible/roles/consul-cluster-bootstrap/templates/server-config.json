@@ -1,0 +1,13 @@
+{
+    "bootstrap_expect": {{ groups['consul_cluster'] | length }},
+    "server": true,
+    "datacenter": "{{ consul.datacenter_name }}",
+    "data_dir": "{{ consul.root_dir }}/data/",
+    "log_level": "INFO",
+    "enable_syslog": false,
+    "advertise_addr": "{{ ansible_host }}",
+    "encrypt": "{{ consul_key.stdout }}",
+    "addresses": {
+    	"http": "{{ ansible_host }}"
+  	}
+}

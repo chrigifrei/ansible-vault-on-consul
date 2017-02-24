@@ -1,0 +1,12 @@
+[Unit]
+Description=consul - service broker
+After=network.target
+
+[Service]
+ExecStart="{{ all.bin_dir }}/consul agent -config-file {{ consul.config_dir }}/config.json -config-dir {{ consul.config_dir }}/services.d/ -ui-dir {{ consul.root_dir }}/ui/; echo $! > /var/run/consul.pid"
+Type=forking
+User=consul
+PIDFile="/var/run/consul.pid"
+
+[Install]
+WantedBy=default.target

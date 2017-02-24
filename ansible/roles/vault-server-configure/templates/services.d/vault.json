@@ -1,0 +1,36 @@
+{
+  "services": [
+    {
+      "name": "vault",
+      "tags": [
+        "master"
+      ],
+      "address": "{{ ansible_host }}",
+      "port": {{ vault.service_listen_port }},
+      "enableTagOverride": false,
+      "check": {
+        "id": "vault",
+        "name": "Vault Health Check",
+        "http": "http://{{ ansible_host }}:{{ vault.service_listen_port }}/v1/sys/health",
+        "interval": "20s",
+        "timeout": "2s"
+      }
+    },
+    {
+      "name": "vault",
+      "tags": [
+        "slave"
+      ],
+      "address": "{{ ansible_host }}",
+      "port": {{ vault.service_listen_port }},
+      "enableTagOverride": false,
+      "check": {
+        "id": "vault",
+        "name": "Vault Health Check",
+        "http": "http://{{ ansible_host }}:{{ vault.service_listen_port }}/v1/sys/health",
+        "interval": "20s",
+        "timeout": "2s"
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+---
+
+#
+# playbook to setup vault based on consul
+#
+
+
+- hosts: consul_cluster
+  gather_facts: True
+  roles:
+    - { role: consul-install, tags: ['consul'] }
+    - { role: consul-cluster-bootstrap, tags: ['consul'] }
+
+- hosts: vault_servers
+  gather_facts: False
+  roles:
+    - { role: vault-install, tags: ['vault'] }
+    - { role: vault-server-configure, tags: ['vault'] }
+
+- hosts: clients
+  gather_facts: False
+  roles:
+    - { role: consul-install, tags: ['consul'] }
+    - { role: vault-install, tags: ['vault'] }

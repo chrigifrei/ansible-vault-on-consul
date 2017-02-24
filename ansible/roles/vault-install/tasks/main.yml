@@ -1,0 +1,53 @@
+---
+
+# installs Hashicorp Vault (vaultproject.io)
+
+
+- name: install prereqs
+  yum: 
+    name={{ item }}
+    state=present
+  with_items:
+    - unzip
+    - jq
+    - curl
+
+- name: unpack the archive
+  unarchive: 
+    src="{{ vault.binary_archive }}"
+    dest="{{ all.bin_dir }}"
+
+- name: create data dir structure
+  file:   
+    state=directory
+    path={{ item }}
+    owner=root
+    group=root
+    mode=0750
+    recurse=yes
+  with_items:
+    - "{{ all.systemd_unitfiles_dir }}"
+    - "{{ vault.root_dir }}"
+    - "{{ vault.root_dir }}/data"
+    - "{{ vault.root_dir }}/bin"
+    - "{{ vault.config_dir }}"
+    - "{{ vault.config_dir }}/policies"
+    - "{{ vault.log_dir }}"
+
+# the vault binary cannot use the no_proxy var
+# therefore we have to unset the httpX_proxy vars
+- name: put shell wrapper in place
+  template:   
+    src="{{ item }}"
+    dest="{{ vault.root_dir }}/bin/"
+    owner=root
+    group=root
+    mode=0755
+  with_items:
+    - vault-shell-wrapper.sh
+    - consul-node-evaluation.sh
+
+- name: source shell wrapper in /etc/profile
+  lineinfile: 
+    dest=/etc/profile
+    line="[[ $(id -u) -eq 0 ]] && source {{ vault.root_dir }}/bin/vault-shell-wrapper.sh"

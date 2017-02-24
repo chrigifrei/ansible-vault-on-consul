@@ -1,0 +1,177 @@
+---
+
+# configures Hashicorp Vault Server (vaultproject.io)
+
+
+- name: evaluate working consul node
+  command: "{{ vault.root_dir }}/bin/consul-node-evaluation.sh"
+  register: consul_node
+  run_once: true
+
+- name: put config files in place
+  template:   
+    src="{{ item }}"
+    dest="{{ vault.config_dir }}"
+    owner=root
+    group=root
+    mode=0600
+  with_items:
+    - "server-config.hcl"
+
+- name: put policy files in place
+  template:   
+    src="{{ item }}"
+    dest="{{ vault.config_dir }}/policies"
+    owner=root
+    group=root
+    mode=0600
+  with_items:
+    - "{{ lookup('fileglob','policies/*policy.hcl',wantlist=true) }}"
+
+- name: put unseal script in place
+  template:   
+    src="vault-unseal.sh"
+    dest="{{ all.bin_dir }}"
+    owner=root
+    group=root
+    mode=0750
+
+- name: put init.d script in place
+  template:   
+    src="vault.sh"
+    dest="/etc/init.d/vault"
+    owner=root
+    group=root
+    mode=0755
+
+- name: setup logrotate
+  template:   
+    src="vault-logrotate.cfg"
+    dest="/etc/logrotate.d/vault"
+    owner=root
+    group=root
+    mode=0644
+
+- name: enable and restart service
+  service:
+    name="vault"
+    enabled=yes
+    sleep=3
+    state=restarted
+
+- name: waiting for services to start up
+  pause: seconds=5
+
+# INITIALIZATION
+- name: initialize vault
+  shell: "export VAULT_ADDR=http://{{ ansible_host }}:{{ vault.service_listen_port }}; vault init"
+  register: result
+  ignore_errors: yes
+  run_once: true
+
+- name: save vault init secrets
+  copy: 
+    content="{{ result.stdout }}"
+    dest="{{ vault.config_dir }}/{{ vault.init_secrets_file }}"
+    owner=root
+    group=root
+    mode=600
+  run_once: true
+  when: result|success
+
+# Consul Service Discovery
+- name: register service within consul
+  template:   
+    src="{{ item }}"
+    dest="{{ consul.config_dir }}/services.d/"
+    owner=consul
+    group=root
+    mode=0640
+  with_fileglob:
+    - "../templates/services.d/*.json"
+  ignore_errors: yes
+  register: result
+
+- name: restart consul
+  service:
+    name="consul"
+    sleep=5
+    state=restarted
+  ignore_errors: yes
+  when: result|success
+
+- name: unseal vault
+  command: "{{ all.bin_dir }}/vault-unseal.sh"
+  run_once: true
+
+# AUDITING
+- name: reset audit backend
+  shell: "source /etc/profile; vault audit-disable file >/dev/null"
+  ignore_errors: yes
+  run_once: true
+
+- name: enable audit backend
+  shell: "source /etc/profile; vault audit-enable file path={{ vault.log_dir }}/vault-audit.log"
+  run_once: true
+
+# ansible >2.0 
+# - name: find all policies
+#   find:
+#     paths: "{{ vault.config_dir }}/policies"
+#     patterns: "*.hcl"
+#   register: policies_glob
+#   run_once: true
+
+- name: find all policies
+  command: find . -name "*.hcl"
+  args:
+    chdir: "{{ vault.config_dir }}/policies"
+  register: policies_glob
+  run_once: true
+
+# - debug: var=policies_glob
+
+# ansible >2.0 
+# - name: configure audit backend
+#   shell: "source /etc/profile; vault policy-write {{ item.path.split('/')[-1] | replace('.hcl', '') }} {{ item.path }}"
+#   with_items:
+#     - "{{ policies_glob.files }}"
+#   run_once: true
+
+- name: configure audit backend
+  shell: "source /etc/profile; vault policy-write {{ item | replace('.hcl', '') }} {{ item }}"
+  args:
+    chdir: "{{ vault.config_dir }}/policies"
+  with_items:
+    - "{{ policies_glob.stdout_lines }}"
+  run_once: true
+
+# AUTHENTICATION
+- name: reset auth backend LDAP
+  shell: "source /etc/profile; vault auth-disable ldap >/dev/null"
+  ignore_errors: yes
+  run_once: true
+
+- name: enable auth backend LDAP
+  shell: "source /etc/profile; vault auth-enable ldap"
+  run_once: true
+
+- name: configure auth backend LDAP
+  shell: "source /etc/profile; vault write auth/ldap/config {{ vault.ldap_config }}"
+  run_once: true
+
+- name: apply vault policy to LDAP groups
+  shell: "source /etc/profile; vault write auth/ldap/groups/{{ item.name }} policies={{ item.policy }}"
+  with_items: "{{ vault.ldap_groups }}"
+  ignore_errors: yes
+  run_once: true
+
+# extcfr, 04.10.2016: needs to be changed!
+- name: MANUAL ACTION distribute the keys and delete the file
+  debug:
+    msg="Secrets available on {{ groups.vault_servers[0] }} {{ vault.config_dir }}/{{ vault.init_secrets_file }}"
+  run_once: true
+
+# - name: seal vault
+#   shell: "source /etc/profile; vault seal"
+#   run_once: true
